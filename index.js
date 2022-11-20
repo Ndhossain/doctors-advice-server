@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const jwt = require('jsonwebtoken');
 const app = express();
 require('dotenv').config();
 
@@ -8,6 +9,20 @@ const Port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+const verifyJwt = (req, res, next) => {
+    const tokenInfo = req.headers.authorization;
+    if (!tokenInfo) {
+        return res.status(401).send({message: 'unauthorized access'})
+    }
+    const token = tokenInfo.split(' ')[1];
+    jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'forbidden access' })
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
 
 
 
@@ -18,9 +33,16 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 async function run() {
     try {
         const db = client.db("doc-advice");
-        // appointment options
         const appointmentOptionsCollection = db.collection('appointment-options');
         const appointmentBookingCollection = db.collection('appointments');
+        // jwt initialization
+        app.get('/jwt', (req, res) => {
+            const uid = req.query.uid;
+            console.log(uid);
+            const token = jwt.sign({uid}, process.env.SECRET_TOKEN, {expiresIn: '1d'})
+            res.send({accessToken: token});
+        })
+        // appointment options
         app.get('/appointment-options', async (req, res) => {
             const query = {};
             const cursor = await appointmentOptionsCollection.find(query).toArray();
@@ -48,6 +70,13 @@ async function run() {
             const data = req.body;
             const result = await appointmentBookingCollection.insertOne(data);
             res.send(result);
+        })
+        app.get('/bookings', async (req, res) => {
+            const query = {
+                uid: req.query.uid,
+            };
+            const cursor = await appointmentBookingCollection.find(query).toArray();
+            res.send(cursor);
         })
     } finally {}
 }
