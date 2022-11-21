@@ -40,6 +40,7 @@ async function run() {
         app.get('/jwt', async (req, res) => {
             const uid = req.query.uid;
             const query = {uid}
+            console.log(query);
             const userRes = await usersCollection.findOne(query);
             if(!userRes) {
                 return res.status(403).send({message: 'User not verified'})
@@ -75,6 +76,11 @@ async function run() {
             };
             const result = await usersCollection.updateOne({uid}, updateDoc, options);
             res.send(result);
+        })
+        app.get('/users/admin/:id', verifyJwt, async (req, res) => {
+            const uid = req.params.id;
+            const user = await usersCollection.findOne({uid});
+            res.send({isAdmin: user?.role === 'admin'})
         })
         // appointment options
         app.get('/appointment-options', async (req, res) => {
