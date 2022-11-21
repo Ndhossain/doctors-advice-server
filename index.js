@@ -35,12 +35,46 @@ async function run() {
         const db = client.db("doc-advice");
         const appointmentOptionsCollection = db.collection('appointment-options');
         const appointmentBookingCollection = db.collection('appointments');
+        const usersCollection = db.collection('users');
         // jwt initialization
-        app.get('/jwt', (req, res) => {
+        app.get('/jwt', async (req, res) => {
             const uid = req.query.uid;
-            console.log(uid);
+            const query = {uid}
+            const userRes = await usersCollection.findOne(query);
+            if(!userRes) {
+                return res.status(403).send({message: 'User not verified'})
+            }
             const token = jwt.sign({uid}, process.env.SECRET_TOKEN, {expiresIn: '1d'})
             res.send({accessToken: token});
+        })
+        // users
+        app.post('/users', verifyJwt, async (req, res) => {
+            const data = req.body;
+            const result = await usersCollection.insertOne(data);
+            res.send(result);
+        })
+        app.get('/users', verifyJwt, async (req, res) => {
+            const query = {};
+            const result = await usersCollection.find(query).toArray();
+            res.send(result);
+        })
+        app.put('/users/admin/:id', verifyJwt, async (req, res) => {
+            if (req.query.uid !== req.decoded.uid) {
+                return res.status(403).send({message: 'Unautorized Access'})
+            }
+            const uid = req.params.id;
+            const user = await usersCollection.findOne({uid});
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: 'Unautorized access' })
+            }
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: {
+                  role: req.body.role,
+                },
+            };
+            const result = await usersCollection.updateOne({uid}, updateDoc, options);
+            res.send(result);
         })
         // appointment options
         app.get('/appointment-options', async (req, res) => {
@@ -71,7 +105,10 @@ async function run() {
             const result = await appointmentBookingCollection.insertOne(data);
             res.send(result);
         })
-        app.get('/bookings', async (req, res) => {
+        app.get('/bookings', verifyJwt, async (req, res) => {
+            if (req.query.uid !== req.decoded.uid) {
+                return res.status(403).send({message: 'Unautorized Access'})
+            }
             const query = {
                 uid: req.query.uid,
             };
