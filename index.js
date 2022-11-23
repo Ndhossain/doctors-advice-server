@@ -36,11 +36,11 @@ async function run() {
         const appointmentOptionsCollection = db.collection('appointment-options');
         const appointmentBookingCollection = db.collection('appointments');
         const usersCollection = db.collection('users');
+        const doctorsCollection = db.collection('doctors');
         // jwt initialization
         app.get('/jwt', async (req, res) => {
             const uid = req.query.uid;
             const query = {uid}
-            console.log(query);
             const userRes = await usersCollection.findOne(query);
             if(!userRes) {
                 return res.status(403).send({message: 'User not verified'})
@@ -63,10 +63,10 @@ async function run() {
             if (req.query.uid !== req.decoded.uid) {
                 return res.status(403).send({message: 'Unautorized Access'})
             }
-            const uid = req.params.id;
+            const uid = req.query.uid;
             const user = await usersCollection.findOne({uid});
             if (user?.role !== 'admin') {
-                return res.status(403).send({ message: 'Unautorized access' })
+                return res.status(401).send({ message: 'Unautorized access' })
             }
             const options = { upsert: true };
             const updateDoc = {
@@ -74,7 +74,7 @@ async function run() {
                   role: req.body.role,
                 },
             };
-            const result = await usersCollection.updateOne({uid}, updateDoc, options);
+            const result = await usersCollection.updateOne({uid: req.params.id}, updateDoc, options);
             res.send(result);
         })
         app.get('/users/admin/:id', verifyJwt, async (req, res) => {
@@ -94,6 +94,22 @@ async function run() {
                 const remainingSlots = option.slots.filter(slot => !bookedSlots.includes(slot));
                 option.slots = remainingSlots;
             })
+            res.send(cursor);
+        })
+        app.get('/specilityAbout', async (req, res) => {
+            const query = {};
+            const cursor = await appointmentOptionsCollection.find(query).project({name: 1}).toArray();
+            res.send(cursor)
+        })
+        // doctors collection
+        app.post('/doctors', verifyJwt, async (req, res) => {
+            const data = req.body;
+            const result = await doctorsCollection.insertOne(data);
+            res.send(result);
+        })
+        app.get('/doctors', verifyJwt, async (req, res) => {
+            const query = {};
+            const cursor = await doctorsCollection.find(query).toArray();
             res.send(cursor);
         })
         // appointment bookings
